@@ -37,12 +37,9 @@ jobs:
         shell: powershell
         run: |
           # Enable Remote Desktop
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' `
-                             -Name "fDenyTSConnections" -Value 0 -Force
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' `
-                             -Name "UserAuthentication" -Value 0 -Force
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' `
-                             -Name "SecurityLayer" -Value 0 -Force
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name fDenyTSConnections -Value 0 -Force
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name UserAuthentication -Value 0 -Force
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name SecurityLayer -Value 0 -Force
 
           # Configure Firewall
           netsh advfirewall firewall delete rule name="RDP-Tailscale" > $null 2>&1
@@ -52,12 +49,12 @@ jobs:
       - name: Create RDP User
         shell: powershell
         run: |
-          $username = "DucThengGaming"
+          $username = 'DucThengGaming'
           $password = '${{ github.event.inputs.premium_password }}'
           $securePass = ConvertTo-SecureString $password -AsPlainText -Force
 
           if (-not (Get-LocalUser -Name $username -ErrorAction SilentlyContinue)) {
-            New-LocalUser -Name $username -Password $securePass -AccountNeverExpires
+              New-LocalUser -Name $username -Password $securePass -AccountNeverExpires
           }
 
           Add-LocalGroupMember -Group "Administrators" -Member $username
@@ -69,7 +66,7 @@ jobs:
       - name: Install Tailscale
         shell: powershell
         run: |
-          $tsUrl = "https://pkgs.tailscale.com/stable/tailscale-setup-1.82.0-amd64.msi"
+          $tsUrl = 'https://pkgs.tailscale.com/stable/tailscale-setup-1.82.0-amd64.msi'
           $installer = "$env:TEMP\tailscale.msi"
 
           Invoke-WebRequest -Uri $tsUrl -OutFile $installer
@@ -89,11 +86,11 @@ jobs:
         shell: powershell
         run: |
           $gojoImages = @(
-            "https://i.pinimg.com/originals/3a/7f/ed/3a7fed5f5eb5d0f6d02b7b4c0d9c2e8c.jpg",
-            "https://wallpapercave.com/wp/wp4863670.jpg",
-            "https://i.redd.it/3znf9p5w0aq61.jpg",
-            "https://i.pinimg.com/originals/0b/ef/29/0bef299f6f267d95c8d81a84b8f5bde3.jpg",
-            "https://images.alphacoders.com/123/123456.jpg"
+            'https://i.pinimg.com/originals/3a/7f/ed/3a7fed5f5eb5d0f6d02b7b4c0d9c2e8c.jpg',
+            'https://wallpapercave.com/wp/wp4863670.jpg',
+            'https://i.redd.it/3znf9p5w0aq61.jpg',
+            'https://i.pinimg.com/originals/0b/ef/29/0bef299f6f267d95c8d81a84b8f5bde3.jpg',
+            'https://images.alphacoders.com/123/123456.jpg'
           )
 
           $randomImg = Get-Random -InputObject $gojoImages
@@ -103,8 +100,8 @@ jobs:
           Add-Type @"
           using System.Runtime.InteropServices;
           public class Wallpaper {
-            [DllImport("user32.dll",SetLastError=true)]
-            public static extern bool SystemParametersInfo(int uAction, int uParam, string lpvParam, int fuWinIni);
+              [DllImport("user32.dll", SetLastError=true)]
+              public static extern bool SystemParametersInfo(int uAction, int uParam, string lpvParam, int fuWinIni);
           }
 "@
           [Wallpaper]::SystemParametersInfo(20, 0, $filePath, 3)
