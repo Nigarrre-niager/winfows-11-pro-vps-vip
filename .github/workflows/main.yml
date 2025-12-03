@@ -1,4 +1,4 @@
-name: NigaGamingPro🚀
+name: NigaGamingPro
 
 on:
   workflow_dispatch:
@@ -36,12 +36,9 @@ jobs:
       - name: Configure Core RDP Settings
         shell: powershell
         run: |
-          # Bật Remote Desktop
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name fDenyTSConnections -Value 0 -Force
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name UserAuthentication -Value 0 -Force
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name SecurityLayer -Value 0 -Force
-
-          # Cấu hình Firewall
           netsh advfirewall firewall delete rule name="RDP-Tailscale" > $null 2>&1
           netsh advfirewall firewall add rule name="RDP-Tailscale" dir=in action=allow protocol=TCP localport=3389
           Restart-Service -Name TermService -Force
@@ -54,7 +51,7 @@ jobs:
           $securePass = ConvertTo-SecureString $password -AsPlainText -Force
 
           if (-not (Get-LocalUser -Name $username -ErrorAction SilentlyContinue)) {
-              New-LocalUser -Name $username -Password $securePass -AccountNeverExpires
+            New-LocalUser -Name $username -Password $securePass -AccountNeverExpires
           }
 
           Add-LocalGroupMember -Group "Administrators" -Member $username
@@ -68,7 +65,6 @@ jobs:
         run: |
           $tsUrl = 'https://pkgs.tailscale.com/stable/tailscale-setup-1.82.0-amd64.msi'
           $installer = "$env:TEMP\tailscale.msi"
-
           Invoke-WebRequest -Uri $tsUrl -OutFile $installer
           Start-Process msiexec.exe -ArgumentList "/i `"$installer`" /quiet /norestart" -Wait
           Remove-Item $installer -Force
@@ -78,7 +74,6 @@ jobs:
         run: |
           $premiumKey = '${{ github.event.inputs.premium_key }}'
           & "$env:ProgramFiles\Tailscale\tailscale.exe" up --authkey=$premiumKey --hostname=rdp-premium-${{ github.run_id }}
-
           $ip = & "$env:ProgramFiles\Tailscale\tailscale.exe" ip -4
           echo "TS_IP=$ip" | Out-File -FilePath $env:GITHUB_ENV -Append
 
@@ -92,7 +87,6 @@ jobs:
             'https://i.pinimg.com/originals/0b/ef/29/0bef299f6f267d95c8d81a84b8f5bde3.jpg',
             'https://images.alphacoders.com/123/123456.jpg'
           )
-
           $randomImg = Get-Random -InputObject $gojoImages
           $filePath = "$env:TEMP\gojo_wallpaper.jpg"
           Invoke-WebRequest -Uri $randomImg -OutFile $filePath
@@ -100,8 +94,8 @@ jobs:
           Add-Type @"
           using System.Runtime.InteropServices;
           public class Wallpaper {
-              [DllImport("user32.dll", SetLastError=true)]
-              public static extern bool SystemParametersInfo(int uAction, int uParam, string lpvParam, int fuWinIni);
+            [DllImport("user32.dll", SetLastError=true)]
+            public static extern bool SystemParametersInfo(int uAction, int uParam, string lpvParam, int fuWinIni);
           }
 "@
           [Wallpaper]::SystemParametersInfo(20, 0, $filePath, 3)
@@ -109,12 +103,10 @@ jobs:
       - name: Optimize RDP for Low Bandwidth and Smooth Experience
         shell: powershell
         run: |
-          # Tắt hiệu ứng Windows, animation, font smoothing
           Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" -Name "VisualFXSetting" -Value 2 -Force
           Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "MenuShowDelay" -Value 0 -Force
           Set-ItemProperty -Path 'HKCU:\Software\Microsoft\Terminal Server Client' -Name "RemoteDesktop_SuppressWallpaper" -Value 1 -Force
           Set-ItemProperty -Path 'HKCU:\Software\Microsoft\Terminal Server Client' -Name "RemoteDesktop_SuppressFontSmoothing" -Value 1 -Force
-          # Redirect audio to client
           Set-ItemProperty -Path 'HKLM:\Software\Policies\Microsoft\Windows NT\Terminal Services\Client' -Name "AudioRedirectionMode" -Value 1 -Force
 
       - name: Show RDP Information
@@ -132,7 +124,6 @@ jobs:
         shell: powershell
         run: |
           $inputDuration = '${{ github.event.inputs.rdp_duration }}'
-
           switch ($inputDuration) {
             '5 phút' { $duration = 5 }
             '10 phút' { $duration = 10 }
@@ -148,13 +139,10 @@ jobs:
             '30 ngày' { $duration = 43200 }
             default { $duration = 60 }
           }
-
           $endTime = (Get-Date).AddMinutes($duration)
           Write-Host "RDP Premium sẽ chạy đến: $endTime"
-
           while ((Get-Date) -lt $endTime) {
             Write-Host "RDP Premium Running... $(Get-Date)"
             Start-Sleep -Seconds 60
           }
-
           Write-Host "Thời gian RDP Premium đã kết thúc."
