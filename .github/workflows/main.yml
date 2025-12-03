@@ -1,0 +1,152 @@
+name: DucThengGaming🚀
+
+on:
+  workflow_dispatch:
+    inputs:
+      premium_key:
+        description: "Nhập Premium Key"
+        required: true
+      premium_password:
+        description: "Nhập Premium Password"
+        required: true
+      rdp_duration:
+        description: "Chọn thời gian sống RDP"
+        required: true
+        type: choice
+        options:
+          - "5 phút"
+          - "10 phút"
+          - "20 phút"
+          - "30 phút"
+          - "1 giờ"
+          - "2 giờ"
+          - "6 giờ"
+          - "12 giờ"
+          - "1 ngày"
+          - "3 ngày"
+          - "7 ngày"
+          - "30 ngày"
+
+jobs:
+  secure-rdp:
+    runs-on: windows-2022
+    timeout-minutes: 43200  # 30 ngày max
+
+    steps:
+      - name: Configure Core RDP Settings
+        shell: powershell
+        run: |
+          # Enable Remote Desktop
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' `
+                             -Name "fDenyTSConnections" -Value 0 -Force
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' `
+                             -Name "UserAuthentication" -Value 0 -Force
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' `
+                             -Name "SecurityLayer" -Value 0 -Force
+
+          # Configure Firewall
+          netsh advfirewall firewall delete rule name="RDP-Tailscale" > $null 2>&1
+          netsh advfirewall firewall add rule name="RDP-Tailscale" dir=in action=allow protocol=TCP localport=3389
+          Restart-Service -Name TermService -Force
+
+      - name: Create RDP User
+        shell: powershell
+        run: |
+          $username = "DucThengGaming"
+          $password = '${{ github.event.inputs.premium_password }}'
+          $securePass = ConvertTo-SecureString $password -AsPlainText -Force
+
+          if (-not (Get-LocalUser -Name $username -ErrorAction SilentlyContinue)) {
+            New-LocalUser -Name $username -Password $securePass -AccountNeverExpires
+          }
+
+          Add-LocalGroupMember -Group "Administrators" -Member $username
+          Add-LocalGroupMember -Group "Remote Desktop Users" -Member $username
+
+          echo "RDP_USER=$username" | Out-File -FilePath $env:GITHUB_ENV -Append
+          echo "RDP_PASSWORD=$password" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Install Tailscale
+        shell: powershell
+        run: |
+          $tsUrl = "https://pkgs.tailscale.com/stable/tailscale-setup-1.82.0-amd64.msi"
+          $installer = "$env:TEMP\tailscale.msi"
+
+          Invoke-WebRequest -Uri $tsUrl -OutFile $installer
+          Start-Process msiexec.exe -ArgumentList "/i `"$installer`" /quiet /norestart" -Wait
+          Remove-Item $installer -Force
+
+      - name: Connect Tailscale Premium
+        shell: powershell
+        run: |
+          $premiumKey = '${{ github.event.inputs.premium_key }}'
+          & "$env:ProgramFiles\Tailscale\tailscale.exe" up --authkey=$premiumKey --hostname=rdp-premium-${{ github.run_id }}
+
+          $ip = & "$env:ProgramFiles\Tailscale\tailscale.exe" ip -4
+          echo "TS_IP=$ip" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Set Random Gojo Wallpaper
+        shell: powershell
+        run: |
+          $gojoImages = @(
+            "https://i.pinimg.com/originals/3a/7f/ed/3a7fed5f5eb5d0f6d02b7b4c0d9c2e8c.jpg",
+            "https://wallpapercave.com/wp/wp4863670.jpg",
+            "https://i.redd.it/3znf9p5w0aq61.jpg",
+            "https://i.pinimg.com/originals/0b/ef/29/0bef299f6f267d95c8d81a84b8f5bde3.jpg",
+            "https://images.alphacoders.com/123/123456.jpg"
+          )
+
+          $randomImg = Get-Random -InputObject $gojoImages
+          $filePath = "$env:TEMP\gojo_wallpaper.jpg"
+          Invoke-WebRequest -Uri $randomImg -OutFile $filePath
+
+          Add-Type @"
+          using System.Runtime.InteropServices;
+          public class Wallpaper {
+            [DllImport("user32.dll",SetLastError=true)]
+            public static extern bool SystemParametersInfo(int uAction, int uParam, string lpvParam, int fuWinIni);
+          }
+"@
+          [Wallpaper]::SystemParametersInfo(20, 0, $filePath, 3)
+
+      - name: Show RDP Information
+        shell: powershell
+        run: |
+          Write-Host "`n===== RDP PREMIUM ====="
+          Write-Host "Tailscale IP  : $env:TS_IP"
+          Write-Host "Premium Key   : '${{ github.event.inputs.premium_key }}'"
+          Write-Host "User          : $env:RDP_USER"
+          Write-Host "Password      : $env:RDP_PASSWORD"
+          Write-Host "Thời gian sống: '${{ github.event.inputs.rdp_duration }}'"
+          Write-Host "=========================`n"
+
+      - name: Keep Alive for Duration
+        shell: powershell
+        run: |
+          $inputDuration = '${{ github.event.inputs.rdp_duration }}'
+
+          switch ($inputDuration) {
+            '5 phút' { $duration = 5 }
+            '10 phút' { $duration = 10 }
+            '20 phút' { $duration = 20 }
+            '30 phút' { $duration = 30 }
+            '1 giờ' { $duration = 60 }
+            '2 giờ' { $duration = 120 }
+            '6 giờ' { $duration = 360 }
+            '12 giờ' { $duration = 720 }
+            '1 ngày' { $duration = 1440 }
+            '3 ngày' { $duration = 4320 }
+            '7 ngày' { $duration = 10080 }
+            '30 ngày' { $duration = 43200 }
+            default { $duration = 60 }
+          }
+
+          $endTime = (Get-Date).AddMinutes($duration)
+          Write-Host "RDP Premium sẽ chạy đến: $endTime"
+
+          while ((Get-Date) -lt $endTime) {
+            Write-Host "RDP Premium Running... $(Get-Date)"
+            Start-Sleep -Seconds 60
+          }
+
+          Write-Host "Thời gian RDP Premium đã kết thúc."
