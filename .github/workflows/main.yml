@@ -1,148 +1,131 @@
-name: NigaGamingPro
+name: RDP - Win11Pro UI (Fake)
 
 on:
   workflow_dispatch:
-    inputs:
-      premium_key:
-        description: "Nhập Premium Key"
-        required: true
-      premium_password:
-        description: "Nhập Premium Password"
-        required: true
-      rdp_duration:
-        description: "Chọn thời gian sống RDP"
-        required: true
-        type: choice
-        options:
-          - "5 phút"
-          - "10 phút"
-          - "20 phút"
-          - "30 phút"
-          - "1 giờ"
-          - "2 giờ"
-          - "6 giờ"
-          - "12 giờ"
-          - "1 ngày"
-          - "3 ngày"
-          - "7 ngày"
-          - "30 ngày"
 
 jobs:
   secure-rdp:
-    runs-on: windows-2022
-    timeout-minutes: 43200
+    runs-on: windows-latest
+    timeout-minutes: 3600
 
     steps:
       - name: Configure Core RDP Settings
         shell: powershell
         run: |
-          Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server" -Name "fDenyTSConnections" -Value 0 -Force
-          Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" -Name "UserAuthentication" -Value 0 -Force
-          Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" -Name "SecurityLayer" -Value 0 -Force
-          netsh advfirewall firewall delete rule name="RDP-Tailscale" > $null 2>&1
+          # Bật Remote Desktop
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' `
+            -Name "fDenyTSConnections" -Value 0 -Force
+
+          # Vô hiệu hóa NLA để dễ kết nối (nếu cần)
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' `
+            -Name "UserAuthentication" -Value 0 -Force
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' `
+            -Name "SecurityLayer" -Value 0 -Force
+
+          # Firewall rule cho RDP
+          netsh advfirewall firewall delete rule name="RDP-Tailscale" || Write-Output "No existing rule"
           netsh advfirewall firewall add rule name="RDP-Tailscale" dir=in action=allow protocol=TCP localport=3389
+
           Restart-Service -Name TermService -Force
 
-      - name: Create RDP User
+      - name: Create Local User "ducthenggamingpro"
         shell: powershell
         run: |
-          $username = "NigaGamingPro"
-          $password = "${{ github.event.inputs.premium_password }}"
-          $securePass = ConvertTo-SecureString $password -AsPlainText -Force
+          Add-Type -AssemblyName System.Security
 
-          if (-not (Get-LocalUser -Name $username -ErrorAction SilentlyContinue)) {
-            New-LocalUser -Name $username -Password $securePass -AccountNeverExpires
+          $charSet = @{
+              Upper   = [char[]](65..90)
+              Lower   = [char[]](97..122)
+              Number  = [char[]](48..57)
+              Special = ([char[]](33..47) + [char[]](58..64) + [char[]](91..96) + [char[]](123..126))
           }
 
-          Add-LocalGroupMember -Group "Administrators" -Member $username
-          Add-LocalGroupMember -Group "Remote Desktop Users" -Member $username
+          $rawPassword = @()
+          $rawPassword += $charSet.Upper | Get-Random -Count 4
+          $rawPassword += $charSet.Lower | Get-Random -Count 4
+          $rawPassword += $charSet.Number | Get-Random -Count 4
+          $rawPassword += $charSet.Special | Get-Random -Count 4
+          $password = -join ($rawPassword | Sort-Object { Get-Random })
 
-          echo "RDP_USER=$username" | Out-File -FilePath $env:GITHUB_ENV -Append
-          echo "RDP_PASSWORD=$password" | Out-File -FilePath $env:GITHUB_ENV -Append
+          $securePass = ConvertTo-SecureString $password -AsPlainText -Force
+
+          if (Get-LocalUser -Name "ducthenggamingpro" -ErrorAction SilentlyContinue) {
+            Write-Host "User exists - setting password and ensuring groups"
+            Set-LocalUser -Name "ducthenggamingpro" -Password $securePass
+          } else {
+            New-LocalUser -Name "ducthenggamingpro" -Password $securePass -AccountNeverExpires -Description "RDP user"
+          }
+
+          Add-LocalGroupMember -Group "Administrators" -Member "ducthenggamingpro" -ErrorAction SilentlyContinue
+          Add-LocalGroupMember -Group "Remote Desktop Users" -Member "ducthenggamingpro" -ErrorAction SilentlyContinue
+
+          echo "RDP_USER=ducthenggamingpro" >> $env:GITHUB_ENV
+          echo "RDP_PASS=$password" >> $env:GITHUB_ENV
+
+      - name: Set Gojo Wallpaper (your uploaded image)
+        shell: powershell
+        run: |
+          $url = "https://files.catbox.moe/3b6j4m.jpg"
+          $path = "$env:PUBLIC\gojo_wallpaper.jpg"
+          Invoke-WebRequest -Uri $url -OutFile $path -UseBasicParsing
+          # Set wallpaper for all users (HKCU may require user context; try per-machine registry)
+          reg add "HKCU\Control Panel\Desktop" /v Wallpaper /t REG_SZ /d "$path" /f
+          # Try per-user update
+          $sig = '[DllImport("user32.dll")] public static extern bool SystemParametersInfo(int uAction, int uParam, string lpvParam, int fuWinIni);'
+          Add-Type -MemberDefinition $sig -Name "Native" -Namespace "WinAPI"
+          [WinAPI.Native]::SystemParametersInfo(20, 0, $path, 3)
+
+      - name: Install ExplorerPatcher (center taskbar + Win11-like start)
+        shell: powershell
+        run: |
+          # ExplorerPatcher đem các chỉnh sửa taskbar/Start cho Explorer (OSS)
+          $epUrl = "https://github.com/valinet/ExplorerPatcher/releases/latest/download/ExplorerPatcherSetup.exe"
+          $epInstaller = "$env:TEMP\ExplorerPatcherSetup.exe"
+          Invoke-WebRequest -Uri $epUrl -OutFile $epInstaller -UseBasicParsing
+
+          # silent install (setup supports silent /S)
+          Start-Process -FilePath $epInstaller -ArgumentList "/S" -Wait -NoNewWindow
+
+          # Small sleep then restart explorer to let EP apply
+          Start-Sleep -Seconds 6
+          Stop-Process -Name explorer -Force -ErrorAction SilentlyContinue
+          Start-Process explorer
+
+      - name: Apply Win11-like Theme & Center Taskbar via ExplorerPatcher JSON
+        shell: powershell
+        run: |
+          # ExplorerPatcher stores settings per user. We'll write to EP registry/config where possible.
+          # Note: On runners some settings may not persist; this tries to enable center taskbar.
+          $epSettingsFile = "$env:LOCALAPPDATA\ep"  # EP may use registry; we'll attempt small registry tweaks
+          # Use EP's command-line if available to set taskbar center (ep client exposes registry keys)
+          reg add "HKCU\Software\ExplorerPatcher\Taskbar" /v centerTaskbar /t REG_DWORD /d 1 /f || Write-Output "Could not add EP center key"
+          # Force Windows accent color + dark theme
+          reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize" /v AppsUseLightTheme /t REG_DWORD /d 0 /f
+          reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize" /v SystemUsesLightTheme /t REG_DWORD /d 0 /f
+
+          # Set accent color (example: blue-ish). 0xFF1E90FF is ARGB, but registry needs decimal/or hex - set via Dword
+          # We'll set a common accent color value
+          reg add "HKCU\Software\Microsoft\Windows\DWM" /v AccentColor /t REG_DWORD /d 4286578815 /f
+
+          # Restart explorer to apply theme settings
+          Stop-Process -Name explorer -Force -ErrorAction SilentlyContinue
+          Start-Sleep -Seconds 2
+          Start-Process explorer
 
       - name: Install Tailscale
         shell: powershell
         run: |
           $tsUrl = "https://pkgs.tailscale.com/stable/tailscale-setup-1.82.0-amd64.msi"
-          $installer = "$env:TEMP\tailscale.msi"
-          Invoke-WebRequest -Uri $tsUrl -OutFile $installer
-          Start-Process msiexec.exe -ArgumentList "/i `"$installer`" /quiet /norestart" -Wait
-          Remove-Item $installer -Force
+          $installerPath = "$env:TEMP\tailscale.msi"
+          Invoke-WebRequest -Uri $tsUrl -OutFile $installerPath -UseBasicParsing
+          Start-Process msiexec.exe -ArgumentList "/i", "`"$installerPath`"", "/quiet", "/norestart" -Wait
+          Remove-Item $installerPath -Force -ErrorAction SilentlyContinue
 
-      - name: Connect Tailscale Premium
+      - name: Establish Tailscale Connection
         shell: powershell
+        env:
+          TAILSCALE_AUTH_KEY: ${{ secrets.TAILSCALE_AUTH_KEY }}
         run: |
-          $premiumKey = "${{ github.event.inputs.premium_key }}"
-          & "$env:ProgramFiles\Tailscale\tailscale.exe" up --authkey=$premiumKey --hostname=rdp-premium-${{ github.run_id }}
-          $ip = & "$env:ProgramFiles\Tailscale\tailscale.exe" ip -4
-          echo "TS_IP=$ip" | Out-File -FilePath $env:GITHUB_ENV -Append
-
-      - name: Set Random Gojo Wallpaper
-        shell: powershell
-        run: |
-          $gojoImages = @(
-            "https://i.pinimg.com/originals/3a/7f/ed/3a7fed5f5eb5d0f6d02b7b4c0d9c2e8c.jpg",
-            "https://wallpapercave.com/wp/wp4863670.jpg",
-            "https://i.redd.it/3znf9p5w0aq61.jpg",
-            "https://i.pinimg.com/originals/0b/ef/29/0bef299f6f267d95c8d81a84b8f5bde3.jpg",
-            "https://images.alphacoders.com/123/123456.jpg"
-          )
-          $randomImg = Get-Random -InputObject $gojoImages
-          $filePath = "$env:TEMP\gojo_wallpaper.jpg"
-          Invoke-WebRequest -Uri $randomImg -OutFile $filePath
-
-          Add-Type @"
-          using System.Runtime.InteropServices;
-          public class Wallpaper {
-            [DllImport(""user32.dll"", SetLastError=true)]
-            public static extern bool SystemParametersInfo(int uAction, int uParam, string lpvParam, int fuWinIni);
-          }
-"@
-          [Wallpaper]::SystemParametersInfo(20, 0, $filePath, 3)
-
-      - name: Optimize RDP for Low Bandwidth
-        shell: powershell
-        run: |
-          Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" -Name "VisualFXSetting" -Value 2 -Force
-          Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "MenuShowDelay" -Value 0 -Force
-          Set-ItemProperty -Path "HKCU:\Software\Microsoft\Terminal Server Client" -Name "RemoteDesktop_SuppressWallpaper" -Value 1 -Force
-          Set-ItemProperty -Path "HKCU:\Software\Microsoft\Terminal Server Client" -Name "RemoteDesktop_SuppressFontSmoothing" -Value 1 -Force
-          Set-ItemProperty -Path "HKLM:\Software\Policies\Microsoft\Windows NT\Terminal Services\Client" -Name "AudioRedirectionMode" -Value 1 -Force
-
-      - name: Show RDP Information
-        shell: powershell
-        run: |
-          Write-Host "`n===== RDP PREMIUM ====="
-          Write-Host "Tailscale IP  : $env:TS_IP"
-          Write-Host "Premium Key   : '${{ github.event.inputs.premium_key }}'"
-          Write-Host "User          : $env:RDP_USER"
-          Write-Host "Password      : $env:RDP_PASSWORD"
-          Write-Host "Thời gian sống: '${{ github.event.inputs.rdp_duration }}'"
-          Write-Host "=========================`n"
-
-      - name: Keep Alive for Duration
-        shell: powershell
-        run: |
-          $inputDuration = "${{ github.event.inputs.rdp_duration }}"
-          switch ($inputDuration) {
-            "5 phút" { $duration = 5 }
-            "10 phút" { $duration = 10 }
-            "20 phút" { $duration = 20 }
-            "30 phút" { $duration = 30 }
-            "1 giờ" { $duration = 60 }
-            "2 giờ" { $duration = 120 }
-            "6 giờ" { $duration = 360 }
-            "12 giờ" { $duration = 720 }
-            "1 ngày" { $duration = 1440 }
-            "3 ngày" { $duration = 4320 }
-            "7 ngày" { $duration = 10080 }
-            "30 ngày" { $duration = 43200 }
-            default { $duration = 60 }
-          }
-          $endTime = (Get-Date).AddMinutes($duration)
-          Write-Host "RDP Premium sẽ chạy đến: $endTime"
-          while ((Get-Date) -lt $endTime) {
-            Write-Host "RDP Premium Running... $(Get-Date)"
-            Start-Sleep -Seconds 60
-          }
-          Write-Host "Thời gian RDP Premium đã kết thúc."
+          $exe = "$env:ProgramFiles\Tailscale\tailscale.exe"
+          if (-not (Test-Path $exe)) {
+            Write-Error "Tailscale executable not found
