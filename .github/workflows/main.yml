@@ -1,28 +1,83 @@
-name: DucThengDay
+name: 🚀 SERVER DucThengGaming
 
 on:
   workflow_dispatch:
+    inputs:
+      duration:
+        description: 'Thời gian sử dụng'
+        required: false
+        default: '1_Giờ_30_Phút_(90m)'
+        type: choice
+        options:
+          - '30_Phút_(30m)'
+          - '1_Giờ_(60m)'
+          - '1_Giờ_30_Phút_(90m)'
+          - '2_Giờ_(120m)'
+          - '2_Giờ_30_Phút_(150m)'
+          - '3_Giờ_(180m)'
+          - '3_Giờ_30_Phút_(210m)'
+          - '4_Giờ_(240m)'
+          - '4_Giờ_30_Phút_(270m)'
+          - '5_Giờ_(300m)'
+          - '5_Giờ_30_Phút_(330m)'
+          - '6_Giờ_(360m)'
+          - '30_Ngày_(43200m)'
+          - '60_Ngày_(86400m)'
+          - '90_Ngày_(129600m)'
 
 jobs:
-  secure-rdp:
+  DucThengGaming-RDP-Setup:
     runs-on: windows-latest
-    timeout-minutes: 3600
-
     steps:
-      - name: Configure Core RDP Settings
+
+      # BANNER KHỞI ĐỘNG
+      - name: KHỞI ĐỘNG
+        shell: powershell
         run: |
-          # Enable Remote Desktop and disable Network Level Authentication (if needed)
+          Write-Host "🚀 Chuẩn bị tạo tài khoản RDP DucThengGaming..." -ForegroundColor Green
+
+      # CẤU HÌNH RDP
+      - name: CẤU HÌNH RDP
+        shell: powershell
+        run: |
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0 -Force
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 0 -Force
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "SecurityLayer" -Value 0 -Force
-          netsh advfirewall firewall delete rule name="RDP-Tailscale"
-          netsh advfirewall firewall add rule name="RDP-Tailscale" dir=in action=allow protocol=TCP localport=3389
-          Restart-Service -Name TermService -Force
+          netsh advfirewall firewall add rule name="RDP-DucTheng" dir=in action=allow protocol=TCP localport=3389
+          Set-Service -Name TermService -StartupType Automatic
+          Start-Service TermService
 
-      - name: Set Gojo Wallpaper
+      # TẠO USER DucThengGaming
+      - name: TẠO USER DucThengGaming
+        shell: powershell
         run: |
-          $gojoUrl = "https://i.pinimg.com/originals/3b/7f/6a/3b7f6a0c02f89e1cfa7c3ee0a0d2f123.jpg"
-          $wallPath = "$env:TEMP\gojo_wallpaper.jpg"
+          $upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ'
+          $lower = 'abcdefghijkmnpqrstuvwxyz'
+          $numbers = '23456789'
+          $all = $upper + $lower + $numbers
+          $pw = ''
+          $pw += $upper[(Get-Random -Minimum 0 -Maximum $upper.Length)]
+          $pw += $lower[(Get-Random -Minimum 0 -Maximum $lower.Length)]
+          $pw += $numbers[(Get-Random -Minimum 0 -Maximum $numbers.Length)]
+          for ($i=1; $i -le 5; $i++) { $pw += $all[(Get-Random -Minimum 0 -Maximum $all.Length)] }
+          $password = -join ($pw.ToCharArray() | Sort-Object { Get-Random })
+          $securePass = ConvertTo-SecureString $password -AsPlainText -Force
+          try { Remove-LocalUser -Name "DucThengGaming" -ErrorAction SilentlyContinue } catch {}
+          New-LocalUser -Name "DucThengGaming" -Password $securePass -AccountNeverExpires
+          Add-LocalGroupMember -Group "Administrators" -Member "DucThengGaming"
+          Add-LocalGroupMember -Group "Remote Desktop Users" -Member "DucThengGaming"
+          Enable-LocalUser -Name "DucThengGaming"
+          echo "RDP_USER=DucThengGaming" >> $env:GITHUB_ENV
+          echo "RDP_PASS=$password" >> $env:GITHUB_ENV
+          Write-Host "✅ Tài khoản DucThengGaming đã sẵn sàng. Mật khẩu: $password" -ForegroundColor Green
+
+      # HÌNH NỀN GOJO
+      - name: SET WALLPAPER GOJO
+        shell: powershell
+        run: |
+          $url = "https://i.imgur.com/YOUR_GOJO_IMAGE.png"
+          $wallpaper = "$env:TEMP\gojo.png"
+          Invoke-WebRequest -Uri $url -OutFile $wallpaper
           Add-Type -TypeDefinition @"
           using System.Runtime.InteropServices;
           public class Wallpaper {
@@ -30,82 +85,39 @@ jobs:
               public static extern bool SystemParametersInfo(int uAction, int uParam, string lpvParam, int fuWinIni);
           }
 "@
-          try {
-              Invoke-WebRequest -Uri $gojoUrl -OutFile $wallPath -ErrorAction Stop
-              [Wallpaper]::SystemParametersInfo(20, 0, $wallPath, 3)
-              Write-Host "Gojo Wallpaper Applied Successfully!"
-          } catch {
-              Write-Warning "Wallpaper could not be applied: $_"
-          }
+          [Wallpaper]::SystemParametersInfo(20, 0, $wallpaper, 3)
+          Write-Host "✅ Hình nền Gojo đã được cài đặt!"
 
-      - name: Create RDP User with Secure Password
+      # THIẾT LẬP TAILSCALE
+      - name: TAILSCALE CONNECTION
+        env:
+          TAILSCALE_AUTH_KEY: ${{ secrets.TAILSCALE_AUTH_KEY }}
+        shell: powershell
         run: |
-          Add-Type -AssemblyName System.Security
-          $charSet = @{
-              Upper   = [char[]](65..90)
-              Lower   = [char[]](97..122)
-              Number  = [char[]](48..57)
-              Special = ([char[]](33..47) + [char[]](58..64) + [char[]](91..96) + [char[]](123..126))
-          }
-          $rawPassword = @()
-          $rawPassword += $charSet.Upper | Get-Random -Count 4
-          $rawPassword += $charSet.Lower | Get-Random -Count 4
-          $rawPassword += $charSet.Number | Get-Random -Count 4
-          $rawPassword += $charSet.Special | Get-Random -Count 4
-          $password = -join ($rawPassword | Sort-Object { Get-Random })
-          $securePass = ConvertTo-SecureString $password -AsPlainText -Force
-          New-LocalUser -Name "DucThengDay" -Password $securePass -AccountNeverExpires
-          Add-LocalGroupMember -Group "Administrators" -Member "DucThengDay"
-          Add-LocalGroupMember -Group "Remote Desktop Users" -Member "DucThengDay"
-          echo "RDP_CREDS=User: DucThengDay | Password: $password" >> $env:GITHUB_ENV
-          if (-not (Get-LocalUser -Name "DucThengDay")) {
-              Write-Warning "User creation failed, workflow will continue."
-          }
+          $msiPath = "$env:TEMP\tailscale.msi"
+          Invoke-WebRequest -Uri "https://pkgs.tailscale.com/stable/tailscale-setup-latest-amd64.msi" -OutFile $msiPath
+          Start-Process msiexec.exe -ArgumentList "/i", "`"$msiPath`"", "/quiet", "/norestart" -Wait
+          Remove-Item $msiPath -Force
+          & "$env:ProgramFiles\Tailscale\tailscale.exe" up --authkey=$env:TAILSCALE_AUTH_KEY --hostname=DucThengGaming-$env:GITHUB_RUN_ID
+          $tsIP = & "$env:ProgramFiles\Tailscale\tailscale.exe" ip -4
+          echo "TAILSCALE_IP=$tsIP" >> $env:GITHUB_ENV
+          Write-Host "✅ Tailscale IP: $tsIP"
 
-      - name: Install Tailscale
+      # KIỂM TRA RDP
+      - name: KIỂM TRA RDP
+        shell: powershell
         run: |
-          $tsUrl = "https://pkgs.tailscale.com/stable/tailscale-setup-1.82.0-amd64.msi"
-          $installerPath = "$env:TEMP\tailscale.msi"
-          Invoke-WebRequest -Uri $tsUrl -OutFile $installerPath
-          Start-Process msiexec.exe -ArgumentList "/i", "`"$installerPath`"", "/quiet", "/norestart" -Wait
-          Remove-Item $installerPath -Force
+          Write-Host "Địa chỉ Tailscale: $env:TAILSCALE_IP"
+          $testResult = Test-NetConnection -ComputerName $env:TAILSCALE_IP -Port 3389 -WarningAction SilentlyContinue
+          if (-not $testResult.TcpTestSucceeded) {
+              Write-Error "Không thể kết nối TCP đến RDP"
+              exit 1
+          }
+          Write-Host "✅ Kết nối RDP thành công"
 
-      - name: Establish Tailscale Connection
+      # DUY TRÌ PHIÊN LÀM VIỆC
+      - name: DUY TRÌ PHIÊN
+        shell: powershell
         run: |
-          & "$env:ProgramFiles\Tailscale\tailscale.exe" up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=gh-runner-$env:GITHUB_RUN_ID
-          $tsIP = $null
-          $retries = 0
-          while (-not $tsIP -and $retries -lt 10) {
-              $tsIP = & "$env:ProgramFiles\Tailscale\tailscale.exe" ip -4
-              Start-Sleep -Seconds 5
-              $retries++
-          }
-          if (-not $tsIP) {
-              Write-Warning "Tailscale IP not assigned. Workflow will continue."
-          } else {
-              echo "TAILSCALE_IP=$tsIP" >> $env:GITHUB_ENV
-          }
-
-      - name: Verify RDP Accessibility
-        run: |
-          if ($env:TAILSCALE_IP) {
-              Write-Host "Tailscale IP: $env:TAILSCALE_IP"
-              $testResult = Test-NetConnection -ComputerName $env:TAILSCALE_IP -Port 3389
-              if ($testResult.TcpTestSucceeded) {
-                  Write-Host "TCP connectivity successful!"
-              } else {
-                  Write-Warning "TCP connection to RDP port 3389 failed, workflow continues."
-              }
-          }
-
-      - name: Maintain Connection
-        run: |
-          Write-Host "`n=== RDP ACCESS ==="
-          Write-Host "Address: $env:TAILSCALE_IP"
-          Write-Host "Username: DucThengDay"
-          Write-Host "Password: $(echo $env:RDP_CREDS)"
-          Write-Host "==================`n"
-          while ($true) {
-              Write-Host "[$(Get-Date)] RDP Active - Use Ctrl+C in workflow to terminate"
-              Start-Sleep -Seconds 300
-          }
+          Write-Host "🕒 Phiên RDP đang chạy. Ctrl+C để dừng workflow."
+          while ($true) { Start-Sleep -Seconds 300 }
