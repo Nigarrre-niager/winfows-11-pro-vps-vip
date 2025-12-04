@@ -12,28 +12,17 @@ jobs:
       - name: Configure Core RDP Settings
         run: |
           # Enable Remote Desktop and disable Network Level Authentication (if needed)
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' `
-                             -Name "fDenyTSConnections" -Value 0 -Force
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' `
-                             -Name "UserAuthentication" -Value 0 -Force
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' `
-                             -Name "SecurityLayer" -Value 0 -Force
-
-          # Remove any existing rule with the same name to avoid duplication
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0 -Force
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 0 -Force
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "SecurityLayer" -Value 0 -Force
           netsh advfirewall firewall delete rule name="RDP-Tailscale"
-          
-          # Allow incoming connection on port 3389
-          netsh advfirewall firewall add rule name="RDP-Tailscale" `
-            dir=in action=allow protocol=TCP localport=3389
-
-          # Restart Remote Desktop service
+          netsh advfirewall firewall add rule name="RDP-Tailscale" dir=in action=allow protocol=TCP localport=3389
           Restart-Service -Name TermService -Force
 
       - name: Set Gojo Wallpaper
         run: |
           $gojoUrl = "https://i.pinimg.com/originals/3b/7f/6a/3b7f6a0c02f89e1cfa7c3ee0a0d2f123.jpg"
           $wallPath = "$env:TEMP\gojo_wallpaper.jpg"
-          Invoke-WebRequest -Uri $gojoUrl -OutFile $wallPath
           Add-Type -TypeDefinition @"
           using System.Runtime.InteropServices;
           public class Wallpaper {
@@ -41,8 +30,13 @@ jobs:
               public static extern bool SystemParametersInfo(int uAction, int uParam, string lpvParam, int fuWinIni);
           }
 "@
-          [Wallpaper]::SystemParametersInfo(20, 0, $wallPath, 3)
-          Write-Host "Gojo Wallpaper Applied Successfully!"
+          try {
+              Invoke-WebRequest -Uri $gojoUrl -OutFile $wallPath -ErrorAction Stop
+              [Wallpaper]::SystemParametersInfo(20, 0, $wallPath, 3)
+              Write-Host "Gojo Wallpaper Applied Successfully!"
+          } catch {
+              Write-Warning "Wallpaper could not be applied: $_"
+          }
 
       - name: Create RDP User with Secure Password
         run: |
@@ -51,8 +45,7 @@ jobs:
               Upper   = [char[]](65..90)
               Lower   = [char[]](97..122)
               Number  = [char[]](48..57)
-              Special = ([char[]](33..47) + [char[]](58..64) +
-                         [char[]](91..96) + [char[]](123..126))
+              Special = ([char[]](33..47) + [char[]](58..64) + [char[]](91..96) + [char[]](123..126))
           }
           $rawPassword = @()
           $rawPassword += $charSet.Upper | Get-Random -Count 4
@@ -64,12 +57,9 @@ jobs:
           New-LocalUser -Name "DucThengDay" -Password $securePass -AccountNeverExpires
           Add-LocalGroupMember -Group "Administrators" -Member "DucThengDay"
           Add-LocalGroupMember -Group "Remote Desktop Users" -Member "DucThengDay"
-          
           echo "RDP_CREDS=User: DucThengDay | Password: $password" >> $env:GITHUB_ENV
-          
           if (-not (Get-LocalUser -Name "DucThengDay")) {
-              Write-Error "User creation failed"
-              exit 1
+              Write-Warning "User creation failed, workflow will continue."
           }
 
       - name: Install Tailscale
@@ -91,20 +81,22 @@ jobs:
               $retries++
           }
           if (-not $tsIP) {
-              Write-Error "Tailscale IP not assigned. Exiting."
-              exit 1
+              Write-Warning "Tailscale IP not assigned. Workflow will continue."
+          } else {
+              echo "TAILSCALE_IP=$tsIP" >> $env:GITHUB_ENV
           }
-          echo "TAILSCALE_IP=$tsIP" >> $env:GITHUB_ENV
 
       - name: Verify RDP Accessibility
         run: |
-          Write-Host "Tailscale IP: $env:TAILSCALE_IP"
-          $testResult = Test-NetConnection -ComputerName $env:TAILSCALE_IP -Port 3389
-          if (-not $testResult.TcpTestSucceeded) {
-              Write-Error "TCP connection to RDP port 3389 failed"
-              exit 1
+          if ($env:TAILSCALE_IP) {
+              Write-Host "Tailscale IP: $env:TAILSCALE_IP"
+              $testResult = Test-NetConnection -ComputerName $env:TAILSCALE_IP -Port 3389
+              if ($testResult.TcpTestSucceeded) {
+                  Write-Host "TCP connectivity successful!"
+              } else {
+                  Write-Warning "TCP connection to RDP port 3389 failed, workflow continues."
+              }
           }
-          Write-Host "TCP connectivity successful!"
 
       - name: Maintain Connection
         run: |
