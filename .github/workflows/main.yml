@@ -1,48 +1,14 @@
-name: RDP-WIN11PRO-GOJO-MEDIA
+name: WIN11-GOJO-WALLPAPER
 
 on:
   workflow_dispatch:
 
 jobs:
-  rdp:
+  wallpaper:
     runs-on: windows-latest
-    timeout-minutes: 3600
+    timeout-minutes: 60
 
     steps:
-      - name: Configure Core RDP
-        run: |
-          # Bật RDP cơ bản, tắt fDenyTSConnections
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0 -Force
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 0 -Force
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "SecurityLayer" -Value 0 -Force
-          # Mở port RDP
-          netsh advfirewall firewall add rule name="RDP-GOJO" dir=in action=allow protocol=TCP localport=3389
-          Restart-Service -Name TermService -Force
-
-      - name: Create RDP User
-        run: |
-          $password = "DucTheng123!"
-          $securePass = ConvertTo-SecureString $password -AsPlainText -Force
-          New-LocalUser -Name "DucThengGamingPro" -Password $securePass -AccountNeverExpires
-          Add-LocalGroupMember -Group "Administrators" -Member "DucThengGamingPro"
-          Add-LocalGroupMember -Group "Remote Desktop Users" -Member "DucThengGamingPro"
-          echo "RDP_CREDS=User: DucThengGamingPro | Password: $password" >> $env:GITHUB_ENV
-
-      - name: Install Tailscale
-        run: |
-          $tsUrl = "https://pkgs.tailscale.com/stable/tailscale-setup-1.82.0-amd64.msi"
-          $installerPath = "$env:TEMP\tailscale.msi"
-          Invoke-WebRequest -Uri $tsUrl -OutFile $installerPath
-          Start-Process msiexec.exe -ArgumentList "/i", "`"$installerPath`"", "/quiet", "/norestart" -Wait
-          Remove-Item $installerPath -Force
-
-      - name: Connect Tailscale
-        run: |
-          & "$env:ProgramFiles\Tailscale\tailscale.exe" up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }}
-          $tsIP = & "$env:ProgramFiles\Tailscale\tailscale.exe" ip -4
-          echo "TAILSCALE_IP=$tsIP" >> $env:GITHUB_ENV
-          Write-Host "Tailscale IP: $tsIP"
-
       - name: Set Gojo Wallpaper
         run: |
           $gojoUrl = "https://i.pinimg.com/originals/3b/7f/6a/3b7f6a0c02f89e1cfa7c3ee0a0d2f123.jpg"
@@ -57,10 +23,3 @@ jobs:
 "@
           [Wallpaper]::SystemParametersInfo(20, 0, $wallPath, 3)
           Write-Host "Gojo Wallpaper Applied Successfully!"
-
-      - name: Optimize Windows for Media
-        run: |
-          # Tắt animation, giảm hiệu ứng → video và nhạc mượt
-          Set-ItemProperty -Path "HKCU:\Control Panel\Desktop\WindowMetrics" -Name "MinAnimate" -Value 0
-          Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" -Name "VisualFXSetting" -Value 2
-          Write-Host "Windows optimized for smooth video and music playback."
