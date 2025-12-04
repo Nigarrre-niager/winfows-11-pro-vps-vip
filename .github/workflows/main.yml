@@ -1,135 +1,136 @@
-name: RDP Windows 11 Premium Ultimate
-on:
-  workflow_dispatch:
+NAME: RDP-PREMIUM-GAMING
 
-jobs:
-  secure-rdp:
-    runs-on: windows-latest
-    timeout-minutes: 360
+ON:
+  WORKFLOW_DISPATCH:
+    INPUTS:
+      PLAY_TIME:
+        DESCRIPTION: "Chọn thời gian chơi"
+        REQUIRED: true
+        DEFAULT: "1h"
+        TYPE: choice
+        OPTIONS:
+          - "6h"
+          - "5h"
+          - "4h"
+          - "3h"
+          - "2h"
+          - "1h"
+          - "30m"
+          - "40m"
+          - "20m"
+          - "10m"
+          - "5m"
 
-    steps:
+JOBS:
+  SECURE-RDP:
+    RUNS-ON: WINDOWS-LATEST
+    TIMEOUT-MINUTES: 3600
 
-      # ============================
-      # 1. ENABLE RDP & CREATE USER
-      # ============================
-      - name: Enable RDP + Create User ducthenggaming
-        run: |
-          Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server" -Name "fDenyTSConnections" -Value 0
-          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-          net user ducthenggaming "123456" /add
-          net localgroup administrators ducthenggaming /add
-          reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\PasswordLess\Device" /v DevicePasswordLessBuildVersion /t REG_DWORD /d 0 /f
+    STEPS:
+      - NAME: PREMIUM INTRO
+        RUN: |
+          Write-Host "`n==============================="
+          Write-Host "  WELCOME TO DUCTHENG GAMING VPS"
+          Write-Host "  WINDOWS 11 PRO PREMIUM EDITION"
+          Write-Host "===============================`n"
 
-      # ============================
-      # 2. SHOW VPS INFO
-      # ============================
-      - name: Show RDP Login Info
-        run: |
-          $ip = (Invoke-WebRequest -Uri "https://api.ipify.org").Content
-          Write-Host "========================="
-          Write-Host "   RDP READY - PREMIUM"
-          Write-Host "IP: $ip"
-          Write-Host "User: ducthenggaming"
-          Write-Host "Pass: 123456"
-          Write-Host "========================="
+      - NAME: OPTIMIZE WINDOWS 11 PRO FOR GAMING
+        RUN: |
+          # Tắt animations, background apps, telemetry, update auto
+          Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "MenuShowDelay" -Value 0
+          Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "ForegroundFlashCount" -Value 0
+          Get-Process | Where-Object {$_.MainWindowTitle -eq ""} | Stop-Process -Force
+          Stop-Service wuauserv -Force
+          Set-Service wuauserv -StartupType Disabled
+          Set-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection" -Name "AllowTelemetry" -Value 0 -Force
+          New-NetFirewallRule -DisplayName "Allow Game Ports" -Direction Inbound -Protocol TCP -LocalPort 49152-65535 -Action Allow
+          Write-Host "Windows 11 PRO Optimized for Gaming!"
 
-      # ============================
-      # 3. AUTO INSTALL APPLICATIONS
-      # ============================
-      - name: Install OBS + TikTok Live + Steam + Google Drive + Roblox
-        run: |
-          Invoke-WebRequest "https://cdn-fastly.obsproject.com/downloads/OBS-Studio-30.2.3-Full-Installer-x64.exe" -OutFile obs.exe
-          Start-Process obs.exe -ArgumentList "/S" -Wait
-
-          Invoke-WebRequest "https://sf16-file-upload-tos.pstatp.com/obj/tiktok-live/LiveStudioSetup.exe" -OutFile tiktok.exe
-          Start-Process tiktok.exe -ArgumentList "/S" -Wait
-          
-          Invoke-WebRequest "https://steamcdn-a.akamaihd.net/client/installer/SteamSetup.exe" -OutFile steam.exe
-          Start-Process steam.exe -ArgumentList "/S" -Wait
-
-          Invoke-WebRequest "https://dl.google.com/drive-file-stream/GoogleDriveSetup.exe" -OutFile drive.exe
-          Start-Process drive.exe -ArgumentList "/silent" -Wait
-
-          Invoke-WebRequest "https://setup.rbxcdn.com/Roblox.exe" -OutFile roblox.exe
-          Start-Process roblox.exe -Wait
-
-      # ============================
-      # 4. AUTO CLEAN WINDOWS BLOATWARE
-      # ============================
-      - name: Remove Bloatware & Clean Windows
-        run: |
-          Get-AppxPackage *xbox* | Remove-AppxPackage
-          Get-AppxPackage *bing* | Remove-AppxPackage
-          Get-AppxPackage *teams* | Remove-AppxPackage
-          Get-AppxPackage *skype* | Remove-AppxPackage
-          Get-AppxPackage *feedback* | Remove-AppxPackage
-          Get-AppxPackage *solitaire* | Remove-AppxPackage
-          Get-AppxPackage *weather* | Remove-AppxPackage
-          Get-AppxPackage *getstarted* | Remove-AppxPackage
-          Get-AppxPackage *people* | Remove-AppxPackage
-
-      # ============================
-      # 5. WINDOWS 11 ULTRA OPTIMIZATION
-      # ============================
-      - name: Optimize Windows for FPS + Ping + Music
-        run: |
-          # Disable lag services
-          Stop-Service SysMain -Force
-          Set-Service SysMain -StartupType Disabled
-          Stop-Service DiagTrack -Force
-          Set-Service DiagTrack -StartupType Disabled
-
-          # CPU/GPU Boost
-          powercfg -setacvalueindex SCHEME_CURRENT SUB_PROCESSOR PROCTHROTTLEMIN 100
-          powercfg -setacvalueindex SCHEME_CURRENT SUB_PROCESSOR PROCTHROTTLEMAX 100
-          powercfg -setactive SCHEME_CURRENT
-
-          # Low latency internet
-          netsh int tcp set global autotuninglevel=normal
-          netsh int tcp set global rss=enabled
-          netsh int tcp set supplemental template=internet
-          netsh int tcp set global ecncapability=enabled
-
-          # Reduce packet loss (mạng yếu vẫn mượt)
-          reg add "HKLM\SYSTEM\CurrentControlSet\Services\Ndu" /v Start /t REG_DWORD /d 4 /f
-
-          # Boost audio playback
-          reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Audio" /v PerformanceMode /t REG_DWORD /d 1 /f
-          reg add "HKCU\Software\Microsoft\Multimedia\Audio" /v UserDuckingPreference /t REG_DWORD /d 3 /f
-
-          # Gaming network priority
-          reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile" /v NetworkThrottlingIndex /t REG_DWORD /d 4294967295 /f
-          reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile" /v SystemResponsiveness /t REG_DWORD /d 0 /f
-
-          # Roblox lag fix
-          reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Internet Settings" /v MaxConnectionsPerServer /t REG_DWORD /d 10 /f
-
-      # ============================
-      # 6. AUTO GPU BOOST (OBS + TIKTOK LIVE)
-      # ============================
-      - name: GPU Boost for Streaming Apps
-        run: |
-          reg add "HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers" /v HwSchMode /t REG_DWORD /d 2 /f
-          reg add "HKCU\Software\Microsoft\DirectX\UserGpuPreferences" /v "obs64.exe" /t REG_SZ /d "GpuPreference=2;" /f
-          reg add "HKCU\Software\Microsoft\DirectX\UserGpuPreferences" /v "LiveStudio.exe" /t REG_SZ /d "GpuPreference=2;" /f
-
-      # ============================
-      # 7. APPLY WALLPAPER (CENTER)
-      # ============================
-      - name: Apply Gojo Wallpaper (Center)
-        run: |
-          Invoke-WebRequest "https://huggingface.co/HieuDepTry-Gojo/resolve/main/gojo.png" -OutFile C:\gojo.png
-          reg add "HKCU\Control Panel\Desktop" /v Wallpaper /t REG_SZ /d "C:\gojo.png" /f
-          reg add "HKCU\Control Panel\Desktop" /v WallpaperStyle /t REG_SZ /d 0 /f
-          reg add "HKCU\Control Panel\Desktop" /v TileWallpaper /t REG_SZ /d 0 /f
-          RUNDLL32.EXE USER32.DLL,UpdatePerUserSystemParameters
-
-      # ============================
-      # 8. KEEP VPS ALIVE
-      # ============================
-      - name: Keep VPS Alive 6 Hours
-        run: |
-          for ($i=1; $i -le 360; $i++) {
-            Write-Host "RDP Active... phút: $i"
-            Start-Sleep -Seconds 60
+      - NAME: CREATE RDP ACCOUNT
+        RUN: |
+          Add-Type -AssemblyName System.Security
+          $CHARSET = @{
+              Upper   = [char[]](65..90)
+              Lower   = [char[]](97..122)
+              Number  = [char[]](48..57)
+              Special = ([char[]](33..47) + [char[]](58..64) + [char[]](91..96) + [char[]](123..126))
           }
+          $RAWPASS = @()
+          $RAWPASS += $CHARSET.Upper | Get-Random -Count 4
+          $RAWPASS += $CHARSET.Lower | Get-Random -Count 4
+          $RAWPASS += $CHARSET.Number | Get-Random -Count 4
+          $RAWPASS += $CHARSET.Special | Get-Random -Count 4
+          $PASSWORD = -join ($RAWPASS | Sort-Object { Get-Random })
+          $SECUREPASS = ConvertTo-SecureString $PASSWORD -AsPlainText -Force
+          New-LocalUser -Name "DucThengGamingPro" -Password $SECUREPASS -AccountNeverExpires
+          Add-LocalGroupMember -Group "Administrators" -Member "DucThengGamingPro"
+          Add-LocalGroupMember -Group "Remote Desktop Users" -Member "DucThengGamingPro"
+          ECHO "RDP_CREDS=User: DucThengGamingPro | Password: $PASSWORD" >> $env:GITHUB_ENV
+
+      - NAME: INSTALL TAILSCALE
+        RUN: |
+          $TSURL = "https://pkgs.tailscale.com/stable/tailscale-setup-1.82.0-amd64.msi"
+          $INSTALLERPATH = "$env:TEMP\tailscale.msi"
+          Invoke-WebRequest -Uri $TSURL -OutFile $INSTALLERPATH
+          Start-Process msiexec.exe -ArgumentList "/i", "`"$INSTALLERPATH`"", "/quiet", "/norestart" -Wait
+          Remove-Item $INSTALLERPATH -Force
+
+      - NAME: ESTABLISH TAILSCALE CONNECTION
+        RUN: |
+          & "$env:ProgramFiles\Tailscale\tailscale.exe" up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=ducpro-$env:GITHUB_RUN_ID
+          $TSIP = $NULL
+          $RETRIES = 0
+          WHILE (-NOT $TSIP -AND $RETRIES -LT 10) {
+              $TSIP = & "$env:ProgramFiles\Tailscale\tailscale.exe" ip -4
+              Start-Sleep -Seconds 5
+              $RETRIES++
+          }
+          # KHÔNG EXIT 1 nếu TSIP null (vẫn an toàn)
+          ECHO "TAILSCALE_IP=$TSIP" >> $env:GITHUB_ENV
+
+      - NAME: SET GOJO WALLPAPER
+        RUN: |
+          $GOJO_URL = "https://i.pinimg.com/originals/3b/7f/6a/3b7f6a0c02f89e1cfa7c3ee0a0d2f123.jpg"
+          $WALLPAPER_PATH = "$env:TEMP\gojo_wallpaper.jpg"
+          Invoke-WebRequest -Uri $GOJO_URL -OutFile $WALLPAPER_PATH
+          Add-Type -TypeDefinition @"
+          using System.Runtime.InteropServices;
+          public class Wallpaper {
+              [DllImport("user32.dll", SetLastError = true)]
+              public static extern bool SystemParametersInfo(int uAction, int uParam, string lpvParam, int fuWinIni);
+          }
+"@
+          [Wallpaper]::SystemParametersInfo(20, 0, $WALLPAPER_PATH, 3)
+          Write-Host "Gojo Wallpaper Applied Successfully!"
+
+      - NAME: MAINTAIN CONNECTION WITH TIMER
+        RUN: |
+          $PLAY_TIME = "${{ github.event.inputs.PLAY_TIME }}"
+          Write-Host "`n=== RDP ACCESS ==="
+          Write-Host "Address: $env:TAILSCALE_IP"
+          Write-Host "Username: DucThengGamingPro"
+          Write-Host "Password: $(echo $env:RDP_CREDS)"
+          Write-Host "Selected Play Time: $PLAY_TIME"
+          Write-Host "==================`n"
+          
+          switch ($PLAY_TIME) {
+              "6h"  {$SECONDS = 21600}
+              "5h"  {$SECONDS = 18000}
+              "4h"  {$SECONDS = 14400}
+              "3h"  {$SECONDS = 10800}
+              "2h"  {$SECONDS = 7200}
+              "1h"  {$SECONDS = 3600}
+              "30m" {$SECONDS = 1800}
+              "40m" {$SECONDS = 2400}
+              "20m" {$SECONDS = 1200}
+              "10m" {$SECONDS = 600}
+              "5m"  {$SECONDS = 300}
+              default {$SECONDS = 3600}
+          }
+
+          $ENDTIME = (Get-Date).AddSeconds($SECONDS)
+          WHILE ((Get-Date) -lt $ENDTIME) {
+              Write-Host "[$(Get-Date)] RDP ACTIVE - $PLAY_TIME Remaining: $($ENDTIME - (Get-Date))"
+              Start-Sleep -Seconds 30
+          }
+          Write-Host "Play time ended. Session complete."
