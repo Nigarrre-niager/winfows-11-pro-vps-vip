@@ -1,14 +1,14 @@
-NAME: RDP-PREMIUM-GAMING
+name: RDP-PREMIUM-GAMING
 
-ON:
-  WORKFLOW_DISPATCH:
-    INPUTS:
+on:
+  workflow_dispatch:
+    inputs:
       PLAY_TIME:
-        DESCRIPTION: "Chọn thời gian chơi"
-        REQUIRED: true
-        DEFAULT: "1h"
-        TYPE: choice
-        OPTIONS:
+        description: "Chọn thời gian chơi"
+        required: true
+        default: "1h"
+        type: choice
+        options:
           - "6h"
           - "5h"
           - "4h"
@@ -21,22 +21,26 @@ ON:
           - "10m"
           - "5m"
 
-JOBS:
-  SECURE-RDP:
-    RUNS-ON: WINDOWS-LATEST
-    TIMEOUT-MINUTES: 3600
+jobs:
+  secure-rdp:
+    runs-on: windows-latest
+    timeout-minutes: 3600
 
-    STEPS:
-      - NAME: PREMIUM INTRO
-        RUN: |
+    steps:
+      - name: Premium Intro
+        run: |
           Write-Host "`n==============================="
           Write-Host "  WELCOME TO DUCTHENG GAMING VPS"
           Write-Host "  WINDOWS 11 PRO PREMIUM EDITION"
           Write-Host "===============================`n"
 
-      - NAME: OPTIMIZE WINDOWS 11 PRO FOR GAMING
-        RUN: |
-          # Tắt animations, background apps, telemetry, update auto
+      - name: Set VPS Timezone to Vietnam
+        run: |
+          Set-TimeZone -Name "SE Asia Standard Time"
+          Write-Host "Timezone set to Vietnam (UTC+7)"
+
+      - name: Optimize Windows 11 Pro
+        run: |
           Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "MenuShowDelay" -Value 0
           Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "ForegroundFlashCount" -Value 0
           Get-Process | Where-Object {$_.MainWindowTitle -eq ""} | Stop-Process -Force
@@ -46,53 +50,65 @@ JOBS:
           New-NetFirewallRule -DisplayName "Allow Game Ports" -Direction Inbound -Protocol TCP -LocalPort 49152-65535 -Action Allow
           Write-Host "Windows 11 PRO Optimized for Gaming!"
 
-      - NAME: CREATE RDP ACCOUNT
-        RUN: |
+      - name: Configure Core RDP Settings
+        run: |
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0 -Force
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 0 -Force
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "SecurityLayer" -Value 0 -Force
+          netsh advfirewall firewall delete rule name="RDP-Tailscale"
+          netsh advfirewall firewall add rule name="RDP-Tailscale" dir=in action=allow protocol=TCP localport=3389
+          Restart-Service -Name TermService -Force
+
+      - name: Create RDP Account
+        run: |
           Add-Type -AssemblyName System.Security
-          $CHARSET = @{
+          $charset = @{
               Upper   = [char[]](65..90)
               Lower   = [char[]](97..122)
               Number  = [char[]](48..57)
               Special = ([char[]](33..47) + [char[]](58..64) + [char[]](91..96) + [char[]](123..126))
           }
-          $RAWPASS = @()
-          $RAWPASS += $CHARSET.Upper | Get-Random -Count 4
-          $RAWPASS += $CHARSET.Lower | Get-Random -Count 4
-          $RAWPASS += $CHARSET.Number | Get-Random -Count 4
-          $RAWPASS += $CHARSET.Special | Get-Random -Count 4
-          $PASSWORD = -join ($RAWPASS | Sort-Object { Get-Random })
-          $SECUREPASS = ConvertTo-SecureString $PASSWORD -AsPlainText -Force
-          New-LocalUser -Name "DucThengGamingPro" -Password $SECUREPASS -AccountNeverExpires
+          $rawPass = @()
+          $rawPass += $charset.Upper | Get-Random -Count 4
+          $rawPass += $charset.Lower | Get-Random -Count 4
+          $rawPass += $charset.Number | Get-Random -Count 4
+          $rawPass += $charset.Special | Get-Random -Count 4
+          $password = -join ($rawPass | Sort-Object { Get-Random })
+          $securePass = ConvertTo-SecureString $password -AsPlainText -Force
+          New-LocalUser -Name "DucThengGamingPro" -Password $securePass -AccountNeverExpires
           Add-LocalGroupMember -Group "Administrators" -Member "DucThengGamingPro"
           Add-LocalGroupMember -Group "Remote Desktop Users" -Member "DucThengGamingPro"
-          ECHO "RDP_CREDS=User: DucThengGamingPro | Password: $PASSWORD" >> $env:GITHUB_ENV
+          echo "RDP_CREDS=User: DucThengGamingPro | Password: $password" >> $env:GITHUB_ENV
 
-      - NAME: INSTALL TAILSCALE
-        RUN: |
-          $TSURL = "https://pkgs.tailscale.com/stable/tailscale-setup-1.82.0-amd64.msi"
-          $INSTALLERPATH = "$env:TEMP\tailscale.msi"
-          Invoke-WebRequest -Uri $TSURL -OutFile $INSTALLERPATH
-          Start-Process msiexec.exe -ArgumentList "/i", "`"$INSTALLERPATH`"", "/quiet", "/norestart" -Wait
-          Remove-Item $INSTALLERPATH -Force
+      - name: Install Tailscale
+        run: |
+          $tsUrl = "https://pkgs.tailscale.com/stable/tailscale-setup-1.82.0-amd64.msi"
+          $installerPath = "$env:TEMP\tailscale.msi"
+          Invoke-WebRequest -Uri $tsUrl -OutFile $installerPath
+          Start-Process msiexec.exe -ArgumentList "/i", "`"$installerPath`"", "/quiet", "/norestart" -Wait
+          Remove-Item $installerPath -Force
 
-      - NAME: ESTABLISH TAILSCALE CONNECTION
-        RUN: |
-          & "$env:ProgramFiles\Tailscale\tailscale.exe" up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=ducpro-$env:GITHUB_RUN_ID
-          $TSIP = $NULL
-          $RETRIES = 0
-          WHILE (-NOT $TSIP -AND $RETRIES -LT 10) {
-              $TSIP = & "$env:ProgramFiles\Tailscale\tailscale.exe" ip -4
-              Start-Sleep -Seconds 5
-              $RETRIES++
+      - name: Establish Tailscale Connection (Fast)
+        run: |
+          $tsAuthKey = '${{ secrets.TAILSCALE_AUTH_KEY }}'
+          $tsExe = "$env:ProgramFiles\Tailscale\tailscale.exe"
+          Start-Service -Name Tailscale
+          & $tsExe up --authkey=$tsAuthKey --hostname=ducpro-$env:GITHUB_RUN_ID --accept-routes --fast-reconnect
+          $tsIP = $null
+          $retries = 0
+          while (-not $tsIP -and $retries -lt 5) {
+              $tsIP = & $tsExe ip -4
+              Start-Sleep -Seconds 2
+              $retries++
           }
-          # KHÔNG EXIT 1 nếu TSIP null (vẫn an toàn)
-          ECHO "TAILSCALE_IP=$TSIP" >> $env:GITHUB_ENV
+          echo "TAILSCALE_IP=$tsIP" >> $env:GITHUB_ENV
+          Write-Host "Tailscale IP: $tsIP"
 
-      - NAME: SET GOJO WALLPAPER
-        RUN: |
-          $GOJO_URL = "https://i.pinimg.com/originals/3b/7f/6a/3b7f6a0c02f89e1cfa7c3ee0a0d2f123.jpg"
-          $WALLPAPER_PATH = "$env:TEMP\gojo_wallpaper.jpg"
-          Invoke-WebRequest -Uri $GOJO_URL -OutFile $WALLPAPER_PATH
+      - name: Set Gojo Wallpaper
+        run: |
+          $gojoUrl = "https://i.pinimg.com/originals/3b/7f/6a/3b7f6a0c02f89e1cfa7c3ee0a0d2f123.jpg"
+          $wallPath = "$env:TEMP\gojo_wallpaper.jpg"
+          Invoke-WebRequest -Uri $gojoUrl -OutFile $wallPath
           Add-Type -TypeDefinition @"
           using System.Runtime.InteropServices;
           public class Wallpaper {
@@ -100,37 +116,30 @@ JOBS:
               public static extern bool SystemParametersInfo(int uAction, int uParam, string lpvParam, int fuWinIni);
           }
 "@
-          [Wallpaper]::SystemParametersInfo(20, 0, $WALLPAPER_PATH, 3)
+          [Wallpaper]::SystemParametersInfo(20, 0, $wallPath, 3)
           Write-Host "Gojo Wallpaper Applied Successfully!"
 
-      - NAME: MAINTAIN CONNECTION WITH TIMER
-        RUN: |
-          $PLAY_TIME = "${{ github.event.inputs.PLAY_TIME }}"
-          Write-Host "`n=== RDP ACCESS ==="
-          Write-Host "Address: $env:TAILSCALE_IP"
-          Write-Host "Username: DucThengGamingPro"
-          Write-Host "Password: $(echo $env:RDP_CREDS)"
-          Write-Host "Selected Play Time: $PLAY_TIME"
-          Write-Host "==================`n"
-          
-          switch ($PLAY_TIME) {
-              "6h"  {$SECONDS = 21600}
-              "5h"  {$SECONDS = 18000}
-              "4h"  {$SECONDS = 14400}
-              "3h"  {$SECONDS = 10800}
-              "2h"  {$SECONDS = 7200}
-              "1h"  {$SECONDS = 3600}
-              "30m" {$SECONDS = 1800}
-              "40m" {$SECONDS = 2400}
-              "20m" {$SECONDS = 1200}
-              "10m" {$SECONDS = 600}
-              "5m"  {$SECONDS = 300}
-              default {$SECONDS = 3600}
+      - name: Maintain Connection with Timer
+        run: |
+          $playTime = '${{ github.event.inputs.PLAY_TIME }}'
+          Write-Host "Selected Play Time: $playTime"
+          switch ($playTime) {
+              '6h'  {$seconds = 21600}
+              '5h'  {$seconds = 18000}
+              '4h'  {$seconds = 14400}
+              '3h'  {$seconds = 10800}
+              '2h'  {$seconds = 7200}
+              '1h'  {$seconds = 3600}
+              '30m' {$seconds = 1800}
+              '40m' {$seconds = 2400}
+              '20m' {$seconds = 1200}
+              '10m' {$seconds = 600}
+              '5m'  {$seconds = 300}
+              default {$seconds = 3600}
           }
-
-          $ENDTIME = (Get-Date).AddSeconds($SECONDS)
-          WHILE ((Get-Date) -lt $ENDTIME) {
-              Write-Host "[$(Get-Date)] RDP ACTIVE - $PLAY_TIME Remaining: $($ENDTIME - (Get-Date))"
+          $endTime = (Get-Date).AddSeconds($seconds)
+          while ((Get-Date) -lt $endTime) {
+              Write-Host "[$(Get-Date)] RDP ACTIVE - Remaining: $($endTime - (Get-Date))"
               Start-Sleep -Seconds 30
           }
           Write-Host "Play time ended. Session complete."
