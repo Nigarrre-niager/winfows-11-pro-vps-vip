@@ -1,79 +1,27 @@
-name: RDP-PREMIUM-GAMING
+name: RDP-WIN11PRO-GOJO-MEDIA
 
 on:
   workflow_dispatch:
-    inputs:
-      PLAY_TIME:
-        description: "Chọn thời gian chơi"
-        required: true
-        default: "1h"
-        type: choice
-        options:
-          - "6h"
-          - "5h"
-          - "4h"
-          - "3h"
-          - "2h"
-          - "1h"
-          - "30m"
-          - "40m"
-          - "20m"
-          - "10m"
-          - "5m"
 
 jobs:
-  secure-rdp:
+  rdp:
     runs-on: windows-latest
     timeout-minutes: 3600
 
     steps:
-      - name: Premium Intro
+      - name: Configure Core RDP
         run: |
-          Write-Host "`n==============================="
-          Write-Host "  WELCOME TO DUCTHENG GAMING VPS"
-          Write-Host "  WINDOWS 11 PRO PREMIUM EDITION"
-          Write-Host "===============================`n"
-
-      - name: Set VPS Timezone to Vietnam
-        run: |
-          Set-TimeZone -Name "SE Asia Standard Time"
-          Write-Host "Timezone set to Vietnam (UTC+7)"
-
-      - name: Optimize Windows 11 Pro
-        run: |
-          Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "MenuShowDelay" -Value 0
-          Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "ForegroundFlashCount" -Value 0
-          Get-Process | Where-Object {$_.MainWindowTitle -eq ""} | Stop-Process -Force
-          Stop-Service wuauserv -Force
-          Set-Service wuauserv -StartupType Disabled
-          Set-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection" -Name "AllowTelemetry" -Value 0 -Force
-          New-NetFirewallRule -DisplayName "Allow Game Ports" -Direction Inbound -Protocol TCP -LocalPort 49152-65535 -Action Allow
-          Write-Host "Windows 11 PRO Optimized for Gaming!"
-
-      - name: Configure Core RDP Settings
-        run: |
+          # Bật RDP cơ bản, tắt fDenyTSConnections
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0 -Force
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 0 -Force
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "SecurityLayer" -Value 0 -Force
-          netsh advfirewall firewall delete rule name="RDP-Tailscale"
-          netsh advfirewall firewall add rule name="RDP-Tailscale" dir=in action=allow protocol=TCP localport=3389
+          # Mở port RDP
+          netsh advfirewall firewall add rule name="RDP-GOJO" dir=in action=allow protocol=TCP localport=3389
           Restart-Service -Name TermService -Force
 
-      - name: Create RDP Account
+      - name: Create RDP User
         run: |
-          Add-Type -AssemblyName System.Security
-          $charset = @{
-              Upper   = [char[]](65..90)
-              Lower   = [char[]](97..122)
-              Number  = [char[]](48..57)
-              Special = ([char[]](33..47) + [char[]](58..64) + [char[]](91..96) + [char[]](123..126))
-          }
-          $rawPass = @()
-          $rawPass += $charset.Upper | Get-Random -Count 4
-          $rawPass += $charset.Lower | Get-Random -Count 4
-          $rawPass += $charset.Number | Get-Random -Count 4
-          $rawPass += $charset.Special | Get-Random -Count 4
-          $password = -join ($rawPass | Sort-Object { Get-Random })
+          $password = "DucTheng123!"
           $securePass = ConvertTo-SecureString $password -AsPlainText -Force
           New-LocalUser -Name "DucThengGamingPro" -Password $securePass -AccountNeverExpires
           Add-LocalGroupMember -Group "Administrators" -Member "DucThengGamingPro"
@@ -88,19 +36,10 @@ jobs:
           Start-Process msiexec.exe -ArgumentList "/i", "`"$installerPath`"", "/quiet", "/norestart" -Wait
           Remove-Item $installerPath -Force
 
-      - name: Establish Tailscale Connection (Fast)
+      - name: Connect Tailscale
         run: |
-          $tsAuthKey = '${{ secrets.TAILSCALE_AUTH_KEY }}'
-          $tsExe = "$env:ProgramFiles\Tailscale\tailscale.exe"
-          Start-Service -Name Tailscale
-          & $tsExe up --authkey=$tsAuthKey --hostname=ducpro-$env:GITHUB_RUN_ID --accept-routes --fast-reconnect
-          $tsIP = $null
-          $retries = 0
-          while (-not $tsIP -and $retries -lt 5) {
-              $tsIP = & $tsExe ip -4
-              Start-Sleep -Seconds 2
-              $retries++
-          }
+          & "$env:ProgramFiles\Tailscale\tailscale.exe" up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }}
+          $tsIP = & "$env:ProgramFiles\Tailscale\tailscale.exe" ip -4
           echo "TAILSCALE_IP=$tsIP" >> $env:GITHUB_ENV
           Write-Host "Tailscale IP: $tsIP"
 
@@ -119,27 +58,9 @@ jobs:
           [Wallpaper]::SystemParametersInfo(20, 0, $wallPath, 3)
           Write-Host "Gojo Wallpaper Applied Successfully!"
 
-      - name: Maintain Connection with Timer
+      - name: Optimize Windows for Media
         run: |
-          $playTime = '${{ github.event.inputs.PLAY_TIME }}'
-          Write-Host "Selected Play Time: $playTime"
-          switch ($playTime) {
-              '6h'  {$seconds = 21600}
-              '5h'  {$seconds = 18000}
-              '4h'  {$seconds = 14400}
-              '3h'  {$seconds = 10800}
-              '2h'  {$seconds = 7200}
-              '1h'  {$seconds = 3600}
-              '30m' {$seconds = 1800}
-              '40m' {$seconds = 2400}
-              '20m' {$seconds = 1200}
-              '10m' {$seconds = 600}
-              '5m'  {$seconds = 300}
-              default {$seconds = 3600}
-          }
-          $endTime = (Get-Date).AddSeconds($seconds)
-          while ((Get-Date) -lt $endTime) {
-              Write-Host "[$(Get-Date)] RDP ACTIVE - Remaining: $($endTime - (Get-Date))"
-              Start-Sleep -Seconds 30
-          }
-          Write-Host "Play time ended. Session complete."
+          # Tắt animation, giảm hiệu ứng → video và nhạc mượt
+          Set-ItemProperty -Path "HKCU:\Control Panel\Desktop\WindowMetrics" -Name "MinAnimate" -Value 0
+          Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" -Name "VisualFXSetting" -Value 2
+          Write-Host "Windows optimized for smooth video and music playback."
