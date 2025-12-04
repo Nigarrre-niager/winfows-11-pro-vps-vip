@@ -1,131 +1,135 @@
-name: RDP - Win11Pro UI (Fake)
-
+name: RDP Windows 11 Premium Ultimate
 on:
   workflow_dispatch:
 
 jobs:
   secure-rdp:
     runs-on: windows-latest
-    timeout-minutes: 3600
+    timeout-minutes: 360
 
     steps:
-      - name: Configure Core RDP Settings
-        shell: powershell
+
+      # ============================
+      # 1. ENABLE RDP & CREATE USER
+      # ============================
+      - name: Enable RDP + Create User ducthenggaming
         run: |
-          # Bật Remote Desktop
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' `
-            -Name "fDenyTSConnections" -Value 0 -Force
+          Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server" -Name "fDenyTSConnections" -Value 0
+          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+          net user ducthenggaming "123456" /add
+          net localgroup administrators ducthenggaming /add
+          reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\PasswordLess\Device" /v DevicePasswordLessBuildVersion /t REG_DWORD /d 0 /f
 
-          # Vô hiệu hóa NLA để dễ kết nối (nếu cần)
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' `
-            -Name "UserAuthentication" -Value 0 -Force
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' `
-            -Name "SecurityLayer" -Value 0 -Force
-
-          # Firewall rule cho RDP
-          netsh advfirewall firewall delete rule name="RDP-Tailscale" || Write-Output "No existing rule"
-          netsh advfirewall firewall add rule name="RDP-Tailscale" dir=in action=allow protocol=TCP localport=3389
-
-          Restart-Service -Name TermService -Force
-
-      - name: Create Local User "ducthenggamingpro"
-        shell: powershell
+      # ============================
+      # 2. SHOW VPS INFO
+      # ============================
+      - name: Show RDP Login Info
         run: |
-          Add-Type -AssemblyName System.Security
+          $ip = (Invoke-WebRequest -Uri "https://api.ipify.org").Content
+          Write-Host "========================="
+          Write-Host "   RDP READY - PREMIUM"
+          Write-Host "IP: $ip"
+          Write-Host "User: ducthenggaming"
+          Write-Host "Pass: 123456"
+          Write-Host "========================="
 
-          $charSet = @{
-              Upper   = [char[]](65..90)
-              Lower   = [char[]](97..122)
-              Number  = [char[]](48..57)
-              Special = ([char[]](33..47) + [char[]](58..64) + [char[]](91..96) + [char[]](123..126))
+      # ============================
+      # 3. AUTO INSTALL APPLICATIONS
+      # ============================
+      - name: Install OBS + TikTok Live + Steam + Google Drive + Roblox
+        run: |
+          Invoke-WebRequest "https://cdn-fastly.obsproject.com/downloads/OBS-Studio-30.2.3-Full-Installer-x64.exe" -OutFile obs.exe
+          Start-Process obs.exe -ArgumentList "/S" -Wait
+
+          Invoke-WebRequest "https://sf16-file-upload-tos.pstatp.com/obj/tiktok-live/LiveStudioSetup.exe" -OutFile tiktok.exe
+          Start-Process tiktok.exe -ArgumentList "/S" -Wait
+          
+          Invoke-WebRequest "https://steamcdn-a.akamaihd.net/client/installer/SteamSetup.exe" -OutFile steam.exe
+          Start-Process steam.exe -ArgumentList "/S" -Wait
+
+          Invoke-WebRequest "https://dl.google.com/drive-file-stream/GoogleDriveSetup.exe" -OutFile drive.exe
+          Start-Process drive.exe -ArgumentList "/silent" -Wait
+
+          Invoke-WebRequest "https://setup.rbxcdn.com/Roblox.exe" -OutFile roblox.exe
+          Start-Process roblox.exe -Wait
+
+      # ============================
+      # 4. AUTO CLEAN WINDOWS BLOATWARE
+      # ============================
+      - name: Remove Bloatware & Clean Windows
+        run: |
+          Get-AppxPackage *xbox* | Remove-AppxPackage
+          Get-AppxPackage *bing* | Remove-AppxPackage
+          Get-AppxPackage *teams* | Remove-AppxPackage
+          Get-AppxPackage *skype* | Remove-AppxPackage
+          Get-AppxPackage *feedback* | Remove-AppxPackage
+          Get-AppxPackage *solitaire* | Remove-AppxPackage
+          Get-AppxPackage *weather* | Remove-AppxPackage
+          Get-AppxPackage *getstarted* | Remove-AppxPackage
+          Get-AppxPackage *people* | Remove-AppxPackage
+
+      # ============================
+      # 5. WINDOWS 11 ULTRA OPTIMIZATION
+      # ============================
+      - name: Optimize Windows for FPS + Ping + Music
+        run: |
+          # Disable lag services
+          Stop-Service SysMain -Force
+          Set-Service SysMain -StartupType Disabled
+          Stop-Service DiagTrack -Force
+          Set-Service DiagTrack -StartupType Disabled
+
+          # CPU/GPU Boost
+          powercfg -setacvalueindex SCHEME_CURRENT SUB_PROCESSOR PROCTHROTTLEMIN 100
+          powercfg -setacvalueindex SCHEME_CURRENT SUB_PROCESSOR PROCTHROTTLEMAX 100
+          powercfg -setactive SCHEME_CURRENT
+
+          # Low latency internet
+          netsh int tcp set global autotuninglevel=normal
+          netsh int tcp set global rss=enabled
+          netsh int tcp set supplemental template=internet
+          netsh int tcp set global ecncapability=enabled
+
+          # Reduce packet loss (mạng yếu vẫn mượt)
+          reg add "HKLM\SYSTEM\CurrentControlSet\Services\Ndu" /v Start /t REG_DWORD /d 4 /f
+
+          # Boost audio playback
+          reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Audio" /v PerformanceMode /t REG_DWORD /d 1 /f
+          reg add "HKCU\Software\Microsoft\Multimedia\Audio" /v UserDuckingPreference /t REG_DWORD /d 3 /f
+
+          # Gaming network priority
+          reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile" /v NetworkThrottlingIndex /t REG_DWORD /d 4294967295 /f
+          reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile" /v SystemResponsiveness /t REG_DWORD /d 0 /f
+
+          # Roblox lag fix
+          reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Internet Settings" /v MaxConnectionsPerServer /t REG_DWORD /d 10 /f
+
+      # ============================
+      # 6. AUTO GPU BOOST (OBS + TIKTOK LIVE)
+      # ============================
+      - name: GPU Boost for Streaming Apps
+        run: |
+          reg add "HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers" /v HwSchMode /t REG_DWORD /d 2 /f
+          reg add "HKCU\Software\Microsoft\DirectX\UserGpuPreferences" /v "obs64.exe" /t REG_SZ /d "GpuPreference=2;" /f
+          reg add "HKCU\Software\Microsoft\DirectX\UserGpuPreferences" /v "LiveStudio.exe" /t REG_SZ /d "GpuPreference=2;" /f
+
+      # ============================
+      # 7. APPLY WALLPAPER (CENTER)
+      # ============================
+      - name: Apply Gojo Wallpaper (Center)
+        run: |
+          Invoke-WebRequest "https://huggingface.co/HieuDepTry-Gojo/resolve/main/gojo.png" -OutFile C:\gojo.png
+          reg add "HKCU\Control Panel\Desktop" /v Wallpaper /t REG_SZ /d "C:\gojo.png" /f
+          reg add "HKCU\Control Panel\Desktop" /v WallpaperStyle /t REG_SZ /d 0 /f
+          reg add "HKCU\Control Panel\Desktop" /v TileWallpaper /t REG_SZ /d 0 /f
+          RUNDLL32.EXE USER32.DLL,UpdatePerUserSystemParameters
+
+      # ============================
+      # 8. KEEP VPS ALIVE
+      # ============================
+      - name: Keep VPS Alive 6 Hours
+        run: |
+          for ($i=1; $i -le 360; $i++) {
+            Write-Host "RDP Active... phút: $i"
+            Start-Sleep -Seconds 60
           }
-
-          $rawPassword = @()
-          $rawPassword += $charSet.Upper | Get-Random -Count 4
-          $rawPassword += $charSet.Lower | Get-Random -Count 4
-          $rawPassword += $charSet.Number | Get-Random -Count 4
-          $rawPassword += $charSet.Special | Get-Random -Count 4
-          $password = -join ($rawPassword | Sort-Object { Get-Random })
-
-          $securePass = ConvertTo-SecureString $password -AsPlainText -Force
-
-          if (Get-LocalUser -Name "ducthenggamingpro" -ErrorAction SilentlyContinue) {
-            Write-Host "User exists - setting password and ensuring groups"
-            Set-LocalUser -Name "ducthenggamingpro" -Password $securePass
-          } else {
-            New-LocalUser -Name "ducthenggamingpro" -Password $securePass -AccountNeverExpires -Description "RDP user"
-          }
-
-          Add-LocalGroupMember -Group "Administrators" -Member "ducthenggamingpro" -ErrorAction SilentlyContinue
-          Add-LocalGroupMember -Group "Remote Desktop Users" -Member "ducthenggamingpro" -ErrorAction SilentlyContinue
-
-          echo "RDP_USER=ducthenggamingpro" >> $env:GITHUB_ENV
-          echo "RDP_PASS=$password" >> $env:GITHUB_ENV
-
-      - name: Set Gojo Wallpaper (your uploaded image)
-        shell: powershell
-        run: |
-          $url = "https://files.catbox.moe/3b6j4m.jpg"
-          $path = "$env:PUBLIC\gojo_wallpaper.jpg"
-          Invoke-WebRequest -Uri $url -OutFile $path -UseBasicParsing
-          # Set wallpaper for all users (HKCU may require user context; try per-machine registry)
-          reg add "HKCU\Control Panel\Desktop" /v Wallpaper /t REG_SZ /d "$path" /f
-          # Try per-user update
-          $sig = '[DllImport("user32.dll")] public static extern bool SystemParametersInfo(int uAction, int uParam, string lpvParam, int fuWinIni);'
-          Add-Type -MemberDefinition $sig -Name "Native" -Namespace "WinAPI"
-          [WinAPI.Native]::SystemParametersInfo(20, 0, $path, 3)
-
-      - name: Install ExplorerPatcher (center taskbar + Win11-like start)
-        shell: powershell
-        run: |
-          # ExplorerPatcher đem các chỉnh sửa taskbar/Start cho Explorer (OSS)
-          $epUrl = "https://github.com/valinet/ExplorerPatcher/releases/latest/download/ExplorerPatcherSetup.exe"
-          $epInstaller = "$env:TEMP\ExplorerPatcherSetup.exe"
-          Invoke-WebRequest -Uri $epUrl -OutFile $epInstaller -UseBasicParsing
-
-          # silent install (setup supports silent /S)
-          Start-Process -FilePath $epInstaller -ArgumentList "/S" -Wait -NoNewWindow
-
-          # Small sleep then restart explorer to let EP apply
-          Start-Sleep -Seconds 6
-          Stop-Process -Name explorer -Force -ErrorAction SilentlyContinue
-          Start-Process explorer
-
-      - name: Apply Win11-like Theme & Center Taskbar via ExplorerPatcher JSON
-        shell: powershell
-        run: |
-          # ExplorerPatcher stores settings per user. We'll write to EP registry/config where possible.
-          # Note: On runners some settings may not persist; this tries to enable center taskbar.
-          $epSettingsFile = "$env:LOCALAPPDATA\ep"  # EP may use registry; we'll attempt small registry tweaks
-          # Use EP's command-line if available to set taskbar center (ep client exposes registry keys)
-          reg add "HKCU\Software\ExplorerPatcher\Taskbar" /v centerTaskbar /t REG_DWORD /d 1 /f || Write-Output "Could not add EP center key"
-          # Force Windows accent color + dark theme
-          reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize" /v AppsUseLightTheme /t REG_DWORD /d 0 /f
-          reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize" /v SystemUsesLightTheme /t REG_DWORD /d 0 /f
-
-          # Set accent color (example: blue-ish). 0xFF1E90FF is ARGB, but registry needs decimal/or hex - set via Dword
-          # We'll set a common accent color value
-          reg add "HKCU\Software\Microsoft\Windows\DWM" /v AccentColor /t REG_DWORD /d 4286578815 /f
-
-          # Restart explorer to apply theme settings
-          Stop-Process -Name explorer -Force -ErrorAction SilentlyContinue
-          Start-Sleep -Seconds 2
-          Start-Process explorer
-
-      - name: Install Tailscale
-        shell: powershell
-        run: |
-          $tsUrl = "https://pkgs.tailscale.com/stable/tailscale-setup-1.82.0-amd64.msi"
-          $installerPath = "$env:TEMP\tailscale.msi"
-          Invoke-WebRequest -Uri $tsUrl -OutFile $installerPath -UseBasicParsing
-          Start-Process msiexec.exe -ArgumentList "/i", "`"$installerPath`"", "/quiet", "/norestart" -Wait
-          Remove-Item $installerPath -Force -ErrorAction SilentlyContinue
-
-      - name: Establish Tailscale Connection
-        shell: powershell
-        env:
-          TAILSCALE_AUTH_KEY: ${{ secrets.TAILSCALE_AUTH_KEY }}
-        run: |
-          $exe = "$env:ProgramFiles\Tailscale\tailscale.exe"
-          if (-not (Test-Path $exe)) {
-            Write-Error "Tailscale executable not found
