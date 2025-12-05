@@ -1,0 +1,80 @@
+name: Windows 11 Pro VPS Gojo Auto
+
+on:
+  workflow_dispatch:
+    inputs:
+      duration:
+        description: 'Chọn thời gian sử dụng VPS'
+        required: false
+        default: '1_Giờ_(60m)'
+        type: choice
+        options:
+          - '30_Phút_(30m)'
+          - '1_Giờ_(60m)'
+          - '2_Giờ_(120m)'
+          - '6_Giờ_(360m)'
+
+jobs:
+  create-vps:
+    runs-on: windows-latest
+    timeout-minutes: 360
+    steps:
+      - name: Enable Remote Desktop
+        run: |
+          Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server" -Name "fDenyTSConnections" -Value 0
+          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+
+      - name: Create Temporary Admin User
+        run: |
+          $username = "vpsadmin"
+          $password = ConvertTo-SecureString "Vps@12345" -AsPlainText -Force
+          if (-Not (Get-LocalUser -Name $username -ErrorAction SilentlyContinue)) {
+              New-LocalUser -Name $username -Password $password -FullName "VPS Admin" -Description "Temporary admin user"
+              Add-LocalGroupMember -Group "Administrators" -Member $username
+          }
+
+      - name: Set Vietnam Locale & Optimize Windows
+        run: |
+          Set-WinSystemLocale vi-VN
+          Set-WinUserLanguageList vi-VN -Force
+          Set-WinUILanguageOverride vi-VN
+          Set-Culture vi-VN
+          Set-WinHomeLocation -GeoId 237
+          # Optimize Windows for performance
+          powercfg -setactive SCHEME_MIN   # High Performance
+
+      - name: Set Random Gojo Wallpaper
+        run: |
+          $gojoImages = @(
+            "https://i.imgur.com/Gojo1.png",
+            "https://i.imgur.com/Gojo2.png",
+            "https://i.imgur.com/Gojo3.png"
+          )
+          $rand = Get-Random -Minimum 0 -Maximum $gojoImages.Count
+          $url = $gojoImages[$rand]
+          $path = "C:\Windows\Web\Wallpaper\Gojo.png"
+          Invoke-WebRequest $url -OutFile $path -ErrorAction SilentlyContinue
+          Add-Type @"
+          using System.Runtime.InteropServices;
+          public class Wallpaper {
+              [DllImport("user32.dll", SetLastError = true)]
+              public static extern bool SystemParametersInfo(int uAction, int uParam, string lpvParam, int fuWinIni);
+          }
+"@
+          [Wallpaper]::SystemParametersInfo(20, 0, $path, 3)
+
+      - name: Install Tailscale
+        run: |
+          Invoke-WebRequest -Uri "https://pkgs.tailscale.com/stable/tailscale-ipn-setup.exe" -OutFile "C:\tailscale.exe"
+          Start-Process "C:\tailscale.exe" -ArgumentList "/quiet" -Wait
+          # Thay tskey-yourkey bằng key của bạn
+          Start-Process "C:\tailscale.exe" -ArgumentList "up --authkey tskey-yourkey --hostname VPSVN" -Wait
+          # Lấy IP Tailscale
+          $tailscaleIP = (tailscale ip -4) -join ""
+          Write-Host "✅ VPS IP Tailscale: $tailscaleIP"
+
+      - name: Display VPS Info
+        run: |
+          Write-Host "✅ VPS Windows 11 Pro đã sẵn sàng!"
+          Write-Host "Username: vpsadmin / Password: Vps@12345"
+          Write-Host "Kết nối Remote Desktop hoặc Tailscale IP được hiển thị ở bước trước."
